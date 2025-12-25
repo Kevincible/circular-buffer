@@ -4,13 +4,7 @@
 import Foundation
 import Atomics
 
-protocol DefaultValue {
-    
-    static var defaultValue: Self { get }
-    
-}
-
-class CircularBuffer<DataType: DefaultValue> {
+class CircularBuffer<DataType> {
     
     enum Error: Swift.Error {
         case invalidCount(Int)
@@ -22,13 +16,13 @@ class CircularBuffer<DataType: DefaultValue> {
     
     private var buffers: [DataType]
     
-    private let writeHead: ManagedAtomic<Int> = .init(0)
-    private let readHead: ManagedAtomic<Int> = .init(0)
+    private let writeHead: ManagedAtomic<UInt64> = .init(0)
+    private let readHead: ManagedAtomic<UInt64> = .init(0)
     
-    init(capacity: Int) {
+    init(repeating value: DataType, capacity: Int) {
         precondition(capacity > 0, "Capacity must be greater than 0")
         self.capacity = capacity
-        self.buffers = Array(repeating: DataType.defaultValue, count: capacity)
+        self.buffers = Array(repeating: value, count: capacity)
     }
     
     func write(from data: [DataType]) throws {
@@ -50,11 +44,11 @@ class CircularBuffer<DataType: DefaultValue> {
         let available = w - r
         
         guard available >= count else {
-            throw Error.insufficientSpace(available: available, requested: count)
+            throw Error.insufficientSpace(available: Int(available), requested: count)
         }
         
-        let startIndex = w % capacity
-        let _count = min(count, capacity - startIndex)
+        let startIndex = Int(w % UInt64(capacity))
+        let _count = min(count, capacity - Int(startIndex))
         buffers.withUnsafeMutableBufferPointer { bufferPointer in
             guard let base = bufferPointer.baseAddress else {
                 return
@@ -67,7 +61,7 @@ class CircularBuffer<DataType: DefaultValue> {
             }
         }
         
-        writeHead.store(w + count, ordering: .releasing)
+        writeHead.store(w + UInt64(count), ordering: .releasing)
     }
     
     func read(into data: UnsafeMutablePointer<DataType>, count: Int) throws {
@@ -80,10 +74,10 @@ class CircularBuffer<DataType: DefaultValue> {
         let available = w - r
         
         guard available >= count else {
-            throw Error.insufficientData(available: available, requested: count)
+            throw Error.insufficientData(available: Int(available), requested: count)
         }
         
-        let startIndex = r % capacity
+        let startIndex = Int(r % UInt64(capacity))
         let _count = min(count, capacity - startIndex)
         buffers.withUnsafeBufferPointer { bufferPointer in
             guard let base = bufferPointer.baseAddress else {
@@ -96,7 +90,7 @@ class CircularBuffer<DataType: DefaultValue> {
             }
         }
         
-        readHead.store(r + count, ordering: .releasing)
+        readHead.store(r + UInt64(count), ordering: .releasing)
     }
     
 }
