@@ -19,6 +19,10 @@ class CircularBuffer<DataType> {
     private let writeHead: ManagedAtomic<UInt64> = .init(0)
     private let readHead: ManagedAtomic<UInt64> = .init(0)
     
+    var approximateCount: Int {
+        Int(writeHead.load(ordering: .relaxed) - readHead.load(ordering: .relaxed))
+    }
+    
     init(repeating value: DataType, capacity: Int) {
         precondition(capacity > 0, "Capacity must be greater than 0")
         self.capacity = capacity
