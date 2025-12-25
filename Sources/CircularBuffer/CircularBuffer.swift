@@ -1,2 +1,102 @@
 // The Swift Programming Language
 // https://docs.swift.org/swift-book
+
+import Foundation
+import Atomics
+
+protocol DefaultValue {
+    
+    static var defaultValue: Self { get }
+    
+}
+
+class CircularBuffer<DataType: DefaultValue> {
+    
+    enum Error: Swift.Error {
+        case invalidCount(Int)
+        case insufficientSpace(available: Int, requested: Int)
+        case insufficientData(available: Int, requested: Int)
+    }
+    
+    private let capacity: Int
+    
+    private var buffers: [DataType]
+    
+    private let writeHead: ManagedAtomic<Int> = .init(0)
+    private let readHead: ManagedAtomic<Int> = .init(0)
+    
+    init(capacity: Int) {
+        precondition(capacity > 0, "Capacity must be greater than 0")
+        self.capacity = capacity
+        self.buffers = Array(repeating: DataType.defaultValue, count: capacity)
+    }
+    
+    func write(from data: [DataType]) throws {
+        try data.withUnsafeBufferPointer { bufferPointer in
+            guard let baseAddress = bufferPointer.baseAddress else {
+                return
+            }
+            try write(from: baseAddress, count: bufferPointer.count)
+        }
+    }
+    
+    func write(from data: UnsafePointer<DataType>, count: Int) throws {
+        guard count > 0 else {
+            throw Error.invalidCount(count)
+        }
+        
+        let w = writeHead.load(ordering: .relaxed)
+        let r = readHead.load(ordering: .acquiring)
+        let available = w - r
+        
+        guard available >= count else {
+            throw Error.insufficientSpace(available: available, requested: count)
+        }
+        
+        let startIndex = w % capacity
+        let _count = min(count, capacity - startIndex)
+        buffers.withUnsafeMutableBufferPointer { bufferPointer in
+            guard let base = bufferPointer.baseAddress else {
+                return
+            }
+            base.advanced(by: startIndex)
+                .update(from: data, count: _count)
+            let remaining = count - _count
+            if remaining > 0 {
+                base.update(from: data.advanced(by: _count), count: remaining)
+            }
+        }
+        
+        writeHead.store(w + count, ordering: .releasing)
+    }
+    
+    func read(into data: UnsafeMutablePointer<DataType>, count: Int) throws {
+        guard count > 0 else {
+            throw Error.invalidCount(count)
+        }
+        
+        let w = writeHead.load(ordering: .acquiring)
+        let r = readHead.load(ordering: .relaxed)
+        let available = w - r
+        
+        guard available >= count else {
+            throw Error.insufficientData(available: available, requested: count)
+        }
+        
+        let startIndex = r % capacity
+        let _count = min(count, capacity - startIndex)
+        buffers.withUnsafeBufferPointer { bufferPointer in
+            guard let base = bufferPointer.baseAddress else {
+                return
+            }
+            data.update(from: base.advanced(by: startIndex), count: _count)
+            let remaining = count - _count
+            if remaining > 0 {
+                data.advanced(by: _count).update(from: base, count: remaining)
+            }
+        }
+        
+        readHead.store(r + count, ordering: .releasing)
+    }
+    
+}
