@@ -45,7 +45,7 @@ public class CircularBuffer<DataType> {
         
         let w = writeHead.load(ordering: .relaxed)
         let r = readHead.load(ordering: .acquiring)
-        let available = w - r
+        let available = UInt64(capacity) - (w - r)
         
         guard available >= count else {
             throw Error.insufficientSpace(available: Int(available), requested: count)
