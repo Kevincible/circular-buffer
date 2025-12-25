@@ -4,9 +4,9 @@
 import Foundation
 import Atomics
 
-class CircularBuffer<DataType> {
+public class CircularBuffer<DataType> {
     
-    enum Error: Swift.Error {
+    public enum Error: Swift.Error {
         case invalidCount(Int)
         case insufficientSpace(available: Int, requested: Int)
         case insufficientData(available: Int, requested: Int)
@@ -19,17 +19,17 @@ class CircularBuffer<DataType> {
     private let writeHead: ManagedAtomic<UInt64> = .init(0)
     private let readHead: ManagedAtomic<UInt64> = .init(0)
     
-    var approximateCount: Int {
+    public var approximateCount: Int {
         Int(writeHead.load(ordering: .relaxed) - readHead.load(ordering: .relaxed))
     }
     
-    init(repeating value: DataType, capacity: Int) {
+    public init(repeating value: DataType, capacity: Int) {
         precondition(capacity > 0, "Capacity must be greater than 0")
         self.capacity = capacity
         self.buffers = Array(repeating: value, count: capacity)
     }
     
-    func write(from data: [DataType]) throws {
+    public func write(from data: [DataType]) throws {
         try data.withUnsafeBufferPointer { bufferPointer in
             guard let baseAddress = bufferPointer.baseAddress else {
                 return
@@ -38,7 +38,7 @@ class CircularBuffer<DataType> {
         }
     }
     
-    func write(from data: UnsafePointer<DataType>, count: Int) throws {
+    public func write(from data: UnsafePointer<DataType>, count: Int) throws {
         guard count > 0 else {
             throw Error.invalidCount(count)
         }
@@ -68,7 +68,7 @@ class CircularBuffer<DataType> {
         writeHead.store(w + UInt64(count), ordering: .releasing)
     }
     
-    func read(into data: UnsafeMutablePointer<DataType>, count: Int) throws {
+    public func read(into data: UnsafeMutablePointer<DataType>, count: Int) throws {
         guard count > 0 else {
             throw Error.invalidCount(count)
         }
