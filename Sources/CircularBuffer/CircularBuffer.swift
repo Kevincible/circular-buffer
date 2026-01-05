@@ -29,18 +29,18 @@ public class CircularBuffer<DataType> {
         self.buffers = Array(repeating: value, count: capacity)
     }
     
-    public func write(from data: [DataType]) throws {
-        try data.withUnsafeBufferPointer { bufferPointer in
+    public func write(from data: [DataType]) -> OSStatus {
+        return data.withUnsafeBufferPointer { bufferPointer in
             guard let baseAddress = bufferPointer.baseAddress else {
-                return
+                return -1
             }
-            try write(from: baseAddress, count: bufferPointer.count)
+            return write(from: baseAddress, count: bufferPointer.count)
         }
     }
     
-    public func write(from data: UnsafePointer<DataType>, count: Int) throws {
+    public func write(from data: UnsafePointer<DataType>, count: Int) -> OSStatus {
         guard count > 0 else {
-            throw Error.invalidCount(count)
+            return -1
         }
         
         let w = writeHead.load(ordering: .relaxed)
@@ -48,7 +48,7 @@ public class CircularBuffer<DataType> {
         let available = UInt64(capacity) - (w - r)
         
         guard available >= count else {
-            throw Error.insufficientSpace(available: Int(available), requested: count)
+            return -1
         }
         
         let startIndex = Int(w % UInt64(capacity))
@@ -66,11 +66,12 @@ public class CircularBuffer<DataType> {
         }
         
         writeHead.store(w + UInt64(count), ordering: .releasing)
+        return noErr
     }
     
-    public func read(into data: UnsafeMutablePointer<DataType>, count: Int) throws {
+    public func read(into data: UnsafeMutablePointer<DataType>, count: Int) -> OSStatus {
         guard count > 0 else {
-            throw Error.invalidCount(count)
+            return -1
         }
         
         let w = writeHead.load(ordering: .acquiring)
@@ -78,7 +79,7 @@ public class CircularBuffer<DataType> {
         let available = w - r
         
         guard available >= count else {
-            throw Error.insufficientData(available: Int(available), requested: count)
+            return -1
         }
         
         let startIndex = Int(r % UInt64(capacity))
@@ -95,6 +96,7 @@ public class CircularBuffer<DataType> {
         }
         
         readHead.store(r + UInt64(count), ordering: .releasing)
+        return noErr
     }
     
 }
